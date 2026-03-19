@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>こるく監視</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+/* ===== 全体 ===== */
+body {
+ font-family: sans-serif;
+ max-width: 650px;
+ margin: auto;
+ padding: 20px;
+ background: #fef9f5;
+ position: relative;
+}
+input, select {
+ width: 100%;
+ padding: 8px;
+ margin: 5px 0;
+ border-radius: 8px;
+ box-sizing: border-box;
+}
+button {
+ padding: 6px;
+ margin: 3px;
+ border: none;
+ border-radius: 8px;
+ background: #a0e7e5;
+ cursor: pointer;
+}
+button:hover { background: #7edce5; }
+.hidden{display:none;}
+canvas{background:#fff; margin-top:10px; border-radius:10px;}
+li{margin-bottom:5px;}
+
+/* ===== ロゴ ===== */
+.logo {
+ position:absolute;
+ top:10px;
+ right:15px;
+ background:#d2a679;
+ color:#fff;
+ padding:6px 12px;
+ border-radius:20px;
+ font-weight:bold;
+ box-shadow:0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* ===== コルク表示 ===== */
+#coruku {
+ position:absolute;
+ bottom:10px;
+ left:10px;
+ width:80px;
+ transition:left 0.5s;
+}
+
+/* ===== レスポンシブ ===== */
+@media screen and (max-width:600px){
+ body{padding:10px;}
+ input,select{padding:12px;}
+ button{padding:10px; margin:5px;}
+ #coruku{width:60px;}
+}
+</style>
+</head>
+<body>
+
+<!-- 🐶ロゴ -->
+<div class="logo">🐶 CORUKU</div>
+
+<h1>こるく監視</h1>
+
+<!-- ログイン -->
+<div id="loginArea">
+<input id="username" placeholder="ユーザー名">
+<button onclick="login()">ログイン</button>
+<hr>
+<input id="newUser" placeholder="初回登録はこちら">
+<button onclick="register()">登録</button>
+</div>
+
+<!-- アプリ -->
+<div id="appArea" class="hidden">
+
+<div>
+<span id="userDisplay"></span>
+<button onclick="logout()">ログアウト</button>
+<button onclick="resetAll()">全リセット</button>
+</div>
+
+<button onclick="showTab('input')">健康入力</button>
+<button onclick="showTab('graph')">グラフ</button>
+<button onclick="showTab('corukuTab')">コルク育成</button>
+
+<hr>
+
+<div id="points">🐶こるくポイント：0pt</div>
+
+<!-- ===== 健康入力 ===== -->
+<div id="inputTab">
+
+<input type="date" id="date">
+<input type="number" id="target" placeholder="目標体重">
+<input type="number" id="weight" placeholder="体重">
+<input type="number" id="bmi" placeholder="BMI">
+<input type="number" id="bodyFat" placeholder="体脂肪率">
+<input type="number" id="visceralFat" placeholder="内臓脂肪レベル">
+<input type="number" id="muscle" placeholder="骨格筋率">
+<input type="number" id="bodyAge" placeholder="体年齢">
+<input type="number" id="bmr" placeholder="基礎代謝">
+<input type="number" id="bpH" placeholder="血圧 上">
+<input type="number" id="bpL" placeholder="血圧 下">
+<input type="number" id="pulse" placeholder="脈拍">
+
+<button onclick="add()">追加</button>
+
+<div id="advice"></div>
+<div id="stats"></div>
+
+<h3>記録一覧</h3>
+<ul id="recordList"></ul>
+</div>
+
+<!-- ===== グラフ ===== -->
+<div id="graphTab" class="hidden">
+<button onclick="changeGraph('weight')">体重</button>
+<button onclick="changeGraph('bp')">血圧</button>
+<button onclick="changeGraph('bodyFat')">体脂肪</button>
+<button onclick="changeGraph('visceralFat')">内臓脂肪</button>
+<button onclick="changeGraph('muscle')">骨格筋率</button>
+<button onclick="changeGraph('future')">未来予測</button>
+
+<canvas id="chart"></canvas>
+</div>
+
+<!-- ===== コルク育成 ===== -->
+<div id="corukuTab" class="hidden">
+<h3>🐶コルク育成</h3>
+<div id="inventory"></div>
+<div>
+<button onclick="buyItem('水')">水(10pt)</button>
+<button onclick="buyItem('おやつ')">おやつ(30pt)</button>
+<button onclick="buyItem('ボール')">ボール(20pt)</button>
+<button onclick="buyItem('家')">家(50pt)</button>
+<button onclick="buyItem('帽子')">帽子(25pt)</button>
+<button onclick="buyItem('洋服')">洋服(25pt)</button>
+<button onclick="buyItem('リボン')">リボン(15pt)</button>
+<button onclick="buyItem('おもちゃ')">おもちゃ(30pt)</button>
+<button onclick="buyItem('骨')">骨(10pt)</button>
+<button onclick="buyItem('ベッド')">ベッド(40pt)</button>
+</div>
+<img id="coruku" src="https://via.placeholder.com/80?text=🐶" alt="coruku">
+</div>
+
+<script>
+// ===== ユーザー =====
+let users = JSON.parse(localStorage.getItem("users") || "[]");
+
+function login(){
+const name=username.value;
+if(!users.includes(name)){alert("登録されていません"); return;}
+localStorage.setItem("user",name); startApp();
+}
+
+function register(){
+const name=newUser.value;
+if(users.includes(name)){alert("存在済み"); return;}
+users.push(name);
+localStorage.setItem("users",JSON.stringify(users));
+alert("登録OK");
+}
+
+function logout(){
+localStorage.removeItem("user"); location.reload();
+}
+
+function startApp(){
+loginArea.classList.add("hidden");
+appArea.classList.remove("hidden");
+userDisplay.innerText="ユーザー："+localStorage.getItem("user");
+}
+
+// ===== タブ =====
+function showTab(t){
+inputTab.classList.add("hidden");
+graphTab.classList.add("hidden");
+corukuTab.classList.add("hidden");
+document.getElementById(t+"Tab").classList.remove("hidden");
+}
+
+// ===== データ =====
+let records=JSON.parse(localStorage.getItem("records")||"[]");
+let points=Number(localStorage.getItem("points")||0);
+let inventory=JSON.parse(localStorage.getItem("inventory")||"[]");
+
+function save(){ localStorage.setItem("records",JSON.stringify(records)); localStorage.setItem("inventory",JSON.stringify(inventory)); }
+
+// ===== ポイント =====
+function recalcPoints(){
+points=0;
+records.forEach((r,i)=>{
+points+=10;
+if(i>0){
+let prev=records[i-1];
+if(prev.weight && r.weight){
+if(r.weight<prev.weight) points+=100;
+if(r.weight>prev.weight) points-=100;
+}}
+if((i+1)%7===0){ points+=50; }
+});
+if(points<0) points=0;
+localStorage.setItem("points",points);
+updatePoints();
+}
+function updatePoints(){ document.getElementById("points").innerText="🐶こるくポイント："+points+"pt"; }
+updatePoints();
+
+// ===== 入力追加 =====
+function add(){
+const d={
+date:date.value||new Date().toISOString().split("T")[0],
+target:+target.value||null,
+weight:+weight.value||null,
+bmi:+bmi.value||null,
+bodyFat:+bodyFat.value||null,
+visceralFat:+visceralFat.value||null,
+muscle:+muscle.value||null,
+bodyAge:+bodyAge.value||null,
+bmr:+bmr.value||null,
+bpH:+bpH.value||null,
+bpL:+bpL.value||null,
+pulse:+pulse.value||null
+};
+records.push(d);
+save();
+recalcPoints();
+analyze(d);
+stats();
+renderChart();
+renderList();
+}
+
+// ===== こるくアドバイス =====
+function analyze(d){
+let m="🐶こるくからアドバイス<br>";
+if(d.weight && records.length>1){
+let prev=records[records.length-2].weight;
+if(prev){
+if(d.weight<prev) m+="・体重が減少しています。良い流れです。<br>";
+else if(d.weight>prev) m+="・体重が増加しています。食事と運動を見直しましょう。<br>";
+}}
+if(d.weight && d.target){
+let diff=d.weight-d.target;
+if(diff>0) m+=`・目標まであと${diff.toFixed(1)}kgです。<br>`;
+else m+="・目標達成！素晴らしいです。<br>";
+}
+if(d.bodyFat && d.bodyFat>25) m+="・体脂肪率高め。魚・鶏肉中心がおすすめ。<br>";
+if(d.visceralFat && d.visceralFat>10) m+="・内臓脂肪高め。有酸素運動を！<br>";
+if(d.muscle && d.muscle<30) m+="・骨格筋率低め。筋トレで改善。<br>";
+if(d.bpH && d.bpH>140) m+="・血圧高め。塩分控えましょう。<br>";
+if(d.pulse && d.pulse>90) m+="・脈拍高め。休息を。<br>";
+advice.innerHTML=m;
+}
+
+// ===== 統計 =====
+function stats(){
+let last7=records.slice(-7);
+let avg=last7.reduce((s,r)=>s+(r.weight||0),0)/last7.length;
+stats.innerHTML=`1週間平均：${avg.toFixed(1)}kg`;
+}
+
+// ===== 記録一覧 =====
+function renderList(){
+recordList.innerHTML="";
+records.forEach((r,i)=>{
+let li=document.createElement("li");
+li.innerHTML=`${r.date} | ${r.weight ?? "-"}kg
+<button onclick="editRecord(${i})">編集</button>
+<button onclick="deleteRecord(${i})">削除</button>`;
+recordList.appendChild(li);
+});
+}
+
+function deleteRecord(i){
+if(!confirm("削除しますか？")) return;
+records.splice(i,1); save(); recalcPoints(); renderList(); renderChart();
+}
+
+function editRecord(i){
+let r=records[i];
+date.value=r.date; target.value=r.target; weight.value=r.weight;
+records.splice(i,1); save(); recalcPoints(); renderList(); renderChart();
+}
+
+// ===== リセット =====
+function resetAll(){
+if(!confirm("全データ削除しますか？")) return;
+if(!confirm("本当に削除しますか？")) return;
+localStorage.removeItem("records");
+localStorage.removeItem("points");
+localStorage.removeItem("inventory");
+records=[]; points=0; inventory=[];
+updatePoints(); renderList(); renderChart(); renderInventory();
+}
+
+// ===== グラフ =====
+let chart=new Chart(document.getElementById("chart"),{type:"line",data:{labels:[],datasets:[]}});
+function changeGraph(t){
+let labels=records.map(r=>r.date);
+if(t==="weight") chart.data.datasets=[{label:"体重",data:records.map(r=>r.weight),borderColor:"#ff6384",fill:false}];
+chart.data.labels=labels; chart.update();
+}
+function renderChart(){changeGraph("weight");}
+renderChart(); renderList();
+
+// ===== コルク育成 =====
+function buyItem(name){
+const costs={"水":10,"おやつ":30,"ボール":20,"家":50,"帽子":25,"洋服":25,"リボン":15,"おもちゃ":30,"骨":10,"ベッド":40};
+if(points<costs[name]){alert("ポイント不足"); return;}
+points-=costs[name]; inventory.push(name);
+localStorage.setItem("points",points); localStorage.setItem("inventory",JSON.stringify(inventory));
+updatePoints(); renderInventory();
+}
+
+function renderInventory(){
+inventoryDiv=document.getElementById("inventory");
+inventoryDiv.innerHTML="所持アイテム："+inventory.join(" , ");
+}
+
+// ===== コルクアニメーション =====
+let corukuPos=0;
+setInterval(()=>{
+if(!document.getElementById("coruku").src) return;
+corukuPos+=10; if(corukuPos>window.innerWidth-100) corukuPos=0;
+document.getElementById("coruku").style.left=corukuPos+"px";
+},1000);
+
+if(localStorage.getItem("user")) startApp();
+renderInventory();
+</script>
+</body>
+</html>
